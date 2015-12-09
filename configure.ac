@@ -21,6 +21,8 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_HOST
 
+MOD_CSRF=0
+
 AM_INIT_AUTOMAKE([1.14 -Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar serial-tests silent-rules])
 
 dnl @synopsis TRY_CFLAGS [compiler flags]
@@ -631,7 +633,7 @@ if test "$WITH_OPENSSL" != no; then
     [AC_MSG_ERROR([openssl crypto library not found. install it or build without --with-openssl])]
   )
   AC_CHECK_LIB([ssl], [SSL_new],
-    [SSL_LIB="-lssl -lcrypto"],
+    [SSL_LIB="-lssl -lcrypto" MOD_CSRF=1],
     [AC_MSG_ERROR([openssl ssl library not found. install it or build without --with-openssl])],
     [ -lcrypto "$DL_LIB" ]
   )
@@ -639,6 +641,8 @@ if test "$WITH_OPENSSL" != no; then
   AC_DEFINE([HAVE_LIBSSL], [], [Have libssl])
   AC_SUBST([SSL_LIB])
   AC_SUBST([CRYPTO_LIB])
+else
+  MOD_CSRF=0
 fi
 
 dnl pcre support
@@ -1050,7 +1054,7 @@ AC_SEARCH_LIBS([crypt_r], [crypt],
     AC_CHECK_HEADERS([crypt.h])
     CRYPT_LIB=$LIBS
     found_crypt=crypt
-  ])]
+  ], [ MOD_CSRF=0 ])]
 )
 LIBS=$save_LIBS
 AC_SUBST([CRYPT_LIB])
@@ -1288,6 +1292,11 @@ dnl build version-id
 LIGHTTPD_VERSION_ID=m4_format([0x%x%02x%02x], m4_unquote(m4_split(AC_PACKAGE_VERSION, [\.])))
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
+if test "x$MOD_CSRF" = "x1"; then
+    CSRF_CRYPT_LIB="$CRYPT_LIB"
+    AC_SUBST(CSRF_CRYPT_LIB)
+fi
+
 AC_CONFIG_FILES([\
   distribute.sh \
   doc/config/conf.d/Makefile \
@@ -1412,6 +1421,13 @@ lighty_track_feature "webdav-properties" "" \
 
 lighty_track_feature "webdav-locks" "" \
   'test "$WITH_WEBDAV_LOCKS" != no'
+
+plugin="mod_csrf"
+if test "x$MOD_CSRF" = "x1"; then
+	do_build="$do_build $plugin"
+else
+	no_build="$no_build $plugin"
+fi
 
 dnl output
 
