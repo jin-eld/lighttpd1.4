@@ -428,9 +428,47 @@ URIHANDLER_FUNC(mod_csrf_uri_handler) {
         // true if the URL condition was met and is false otherwise
         if (p->conf.protection) {
             con->http_status = 403;
-            con->mode = DIRECT;
+            con->mode = ((plugin_data *)p_d)->id;
+            con->file_finished = 1;
+
             log_error_write(srv, __FILE__, __LINE__, "s",
                             "denying request with missing token");
+
+            buffer *b;
+
+            buffer_reset(con->physical.path);
+
+            b = buffer_init();
+
+            /* build default error-page */
+            buffer_copy_string_len(b, CONST_STR_LEN(
+                       "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+                       "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
+                       "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
+                       "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+                       " <head>\n"
+                       "  <title>"));
+            buffer_append_int(b, con->http_status);
+            buffer_append_string_len(b, CONST_STR_LEN(" - "));
+            buffer_append_string(b, get_http_status_name(con->http_status));
+
+            buffer_append_string_len(b, CONST_STR_LEN(
+                         "</title>\n"
+                         " </head>\n"
+                         " <body>\n"
+                         "  <h1>"));
+            buffer_append_int(b, con->http_status);
+            buffer_append_string_len(b, CONST_STR_LEN(" - "));
+            buffer_append_string(b, get_http_status_name(con->http_status));
+
+            buffer_append_string_len(b, CONST_STR_LEN("</h1>\n"
+                         " </body>\n"
+                         "</html>\n"
+                         ));
+
+            (void)http_chunk_append_buffer(srv, con, b);
+            buffer_free(b);
+
             return HANDLER_FINISHED;
         }
     }
